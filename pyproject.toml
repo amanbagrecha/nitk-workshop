@@ -1,0 +1,22 @@
+[project]
+name = "imd-aoi-pipeline"
+version = "0.1.0"
+description = "IMD 0.25° daily rainfall data pipeline for AOI subset and export"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "imdlib",
+    "xarray",
+    "rioxarray",
+    "geopandas",
+    "pyogrio",
+    "shapely",
+    "tqdm",
+    "dask",
+    "cftime",
+    "pandas",
+    "pystac-client>=0.9.0",
+    "rasterio>=1.4.3",
+    "stackstac>=0.5.1",
+    "ipykernel>=6.30.1",
+]
