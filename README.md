@@ -1,23 +1,13 @@
-### bulk-download **IMD 0.25° daily rainfall (NetCDF)**, subset to an **AOI** and **time window**, and export **GeoTIFFs/netCDFs**.
+# Geospatial Data Download Toolkit
 
-I’m using **uv** (Astral’s fast Python tool), **imdlib** (purpose-built for IMD downloads), **xarray/rioxarray** for raster work, and **geopandas** for AOIs. Key references are linked inline. ([imdlib.readthedocs.io][1], [imdpune.gov.in][2], [corteva.github.io][3])
+This repository provides tools for downloading and processing geospatial datasets:
 
----
-
-# IMD Rainfall (0.25°) — Workshop Setup
-
-## 0) What you get
-
-* **Bulk downloader** for IMD daily rainfall (1901–present) using `imdlib`. ([imdlib.readthedocs.io][1])
-* **AOI clip** (any shapefile/GeoJSON; assumes WGS84/EPSG:4326). ([corteva.github.io][3])
-* **Time slice** (e.g., 2015-06-01 → 2017-09-30).
-* **Exports**: daily stack or monthly sums in any xarray supported format.
-
-IMD dataset details (grid, extent, units) are documented by IMD Pune; we use the **NetCDF** variant. ([imdpune.gov.in][2])
+1. **IMD Rainfall Pipeline** - Downloads, subsets, and exports daily rainfall data from India Meteorological Department's 0.25° gridded dataset
+2. **Copernicus Data Access** - Demonstrates searching and downloading Sentinel satellite data via CDSE STAC API
 
 ---
 
-## 1) Install prerequisites
+## Installation
 
 > Works on macOS/Linux/WSL. Windows PowerShell users can adapt the activate step.
 
@@ -25,76 +15,115 @@ IMD dataset details (grid, extent, units) are documented by IMD Pune; we use the
 # Install uv (if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone/download this project and navigate to it
-cd imd-aoi-pipeline
-
-# Install the project in development mode with all dependencies
-uv sync --dev
-
-# Activate the virtual environment
+# Set up virtual environment
+uv venv .venv
 source .venv/bin/activate  # Linux/macOS/WSL
 # or
 .venv\Scripts\activate     # Windows PowerShell
+
+# Install dependencies
+uv pip install imdlib xarray rioxarray geopandas pyogrio shapely tqdm dask pystac-client boto3
 ```
 
 ---
 
-## 2) Put your AOI in the project
+## 1. IMD Rainfall Data Pipeline
+
+### Overview
+
+**Bulk-download IMD 0.25° daily rainfall (NetCDF)**, subset to an **AOI** and **time window**, and export **GeoTIFFs/netCDFs**.
+
+Uses **uv** (Astral's fast Python tool), **imdlib** (purpose-built for IMD downloads), **xarray/rioxarray** for raster work, and **geopandas** for AOIs.
+
+### What you get
+
+* **Bulk downloader** for IMD daily rainfall (1901–present) using `imdlib`
+* **AOI clip** (any shapefile/GeoJSON; assumes WGS84/EPSG:4326)
+* **Time slice** (e.g., 2015-06-01 → 2017-09-30)
+* **Exports**: daily stack or monthly sums in any xarray supported format
+
+### Setup your AOI
 
 Drop **one** of these into `data/aoi/`:
 
 * `aoi.geojson` (preferred)
 * or `aoi.shp` + sidecars
 
-AOI must be **EPSG:4326** (lat/lon). If not, we’ll reproject in code.
+AOI must be **EPSG:4326** (lat/lon). If not, we'll reproject in code.
 
----
+### Configuration
 
-## 3) Script: download, subset, and export
+All parameters are at the top of `imd_aoi_pipeline.py`:
 
+* `VARIABLE`: 'rain', 'tmin', or 'tmax'
+* `USE_REALTIME_API`: True=use date-based API, False=use year-based API
+* `START_YEAR`, `END_YEAR`: Year range
+* `TIME_START`, `TIME_END`: ISO date range for time slicing
+* `AOI_PATH`: Path to AOI geometry file
+* Export flags for daily/monthly outputs
 
-**Notes & gotchas (based on docs & field use):**
-
-* IMD NetCDF uses **lat/lon in EPSG:4326** over **66.5E–100E, 6.5N–38.5N**, daily **mm**. If your AOI crosses longitude conventions, ensure it’s in **66.5…100E** range (not 0–360 or −180…180 issues). ([imdpune.gov.in][2], [GIS Stack Exchange][4])
-* `imdlib.get_data()` is the simplest, battle-tested bulk route (yearwise). ([imdlib.readthedocs.io][1])
-* rioxarray clip & examples: see **clip by geometry/box** pages. ([corteva.github.io][3])
-
----
-
-## 4) Run it
+### Run it
 
 ```bash
-# From the project folder:
 uv run python imd_aoi_pipeline.py
 ```
 
-Then look in:
-
-* `outputs/monthly_sum_geotiff/*.tif` (monthly sums), and/or
-* `outputs/daily_geotiff/*.tif` (if enabled).
+Outputs appear in:
+* `outputs/monthly_sum_geotiff/*.tif` (monthly sums)
+* `outputs/daily_geotiff/*.tif` (if enabled)
 
 Open in QGIS—GeoTIFFs are georeferenced.
 
----
+### Notes
 
-## 5) Variations you  might want
-
-* **Different variable**: set `VARIABLE = "tmin"` or `"tmax"`; `imdlib` can fetch those too.
-* **Speed / memory**: turn on dask (installed above), increase `CHUNK_TIME`, or export by year to keep arrays small.
-* **Direct manual URLs**: if you must avoid `imdlib`, curate the **NetCDF year links** from IMD Pune (same product) and download with `aria2c/wget`, then open via `xarray.open_mfdataset`. ([imdpune.gov.in][2])
-* **Background reading on dataset**: official IMD 0.25° dataset papers/notes. ([mausamjournal.imd.gov.in][5], [AGU Publications][6], [Nature][7])
+* IMD NetCDF uses **lat/lon in EPSG:4326** over **66.5E–100E, 6.5N–38.5N**, daily **mm**
+* `imdlib.get_data()` is the battle-tested bulk route (yearwise)
+* Coordinate system: EPSG:4326, extent 66.5E–100E, 6.5N–38.5N
 
 ---
 
+## 2. Copernicus Data Space Ecosystem (CDSE)
 
-[1]: https://imdlib.readthedocs.io/en/latest/Usage.html "Downloading — IMDLIB documentation"
-[2]: https://imdpune.gov.in/cmpg/Griddata/Rainfall_25_NetCDF.html "Yearly Gridded Rainfall (0.25 x 0.25) data NetCDF File"
-[3]: https://corteva.github.io/rioxarray/stable/examples/clip_geom.html "Example - Clip — rioxarray 0.19.0 documentation"
-[4]: https://gis.stackexchange.com/questions/382037/python-rioxarray-clip-masking-netcdf-data-with-a-polygon-returns-all-nan "python rioxarray.clip masking netcdf data with a polygon ..."
-[5]: https://mausamjournal.imd.gov.in/index.php/MAUSAM/article/view/851 "Development of a new high spatial resolution (0.25° × 0.25 ..."
-[6]: https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2022EA002595 "Long‐Term High‐Resolution Gauge Adjusted Satellite ..."
-[7]: https://www.nature.com/articles/s41597-025-04474-2 "A station-based 0.1-degree daily gridded ensemble ..."
-[8]: https://www.sciencedirect.com/science/article/abs/pii/S1364815223002554 "IMDLIB: An open-source library for retrieval, processing ..."
-[9]: https://pypi.org/project/imdlib/ "imdlib"
-[10]: https://corteva.github.io/rioxarray/stable/examples/examples.html "Usage Examples — rioxarray 0.19.0 documentation"
-[11]: https://geog-312.gishub.org/book/geospatial/rioxarray.html "13. Rioxarray - Introduction to GIS Programming"
+### Overview
+
+**CDSE STAC Notebook** (`cdse.ipynb`) demonstrates accessing Sentinel satellite data via CDSE's STAC API.
+
+### What it does
+
+* Uses `pystac-client` to search Sentinel-1/2/3/5P collections
+* Queries by bbox, datetime, and cloud cover filters
+* Accesses JP2 band files via S3 using CDSE credentials
+* API endpoint: `https://stac.dataspace.copernicus.eu/v1/`
+* S3 endpoint: `https://eodata.dataspace.copernicus.eu`
+
+### Setup
+
+1. **Register at Copernicus Data Space**: https://documentation.dataspace.copernicus.eu/APIs/S3.html#registration
+2. **Generate S3 credentials** from your CDSE account
+3. **Set environment variables**:
+   ```bash
+   export CDSE_S3_ACCESS_KEY="your_access_key"
+   export CDSE_S3_SECRET_KEY="your_secret_key"
+   ```
+
+### Usage
+
+Open and run `cdse.ipynb` to:
+1. Connect to CDSE STAC catalog
+2. Search for Sentinel-2 data with filters
+3. Inspect metadata and available assets
+4. Download JP2 band files using S3
+
+---
+
+## References
+
+### IMD Data
+* [IMDLIB documentation](https://imdlib.readthedocs.io/en/latest/Usage.html)
+* [IMD Pune Gridded Data](https://imdpune.gov.in/cmpg/Griddata/Rainfall_25_NetCDF.html)
+* [rioxarray examples](https://corteva.github.io/rioxarray/stable/examples/clip_geom.html)
+
+### Copernicus Data
+* [CDSE Documentation](https://documentation.dataspace.copernicus.eu/)
+* [STAC API Guide](https://documentation.dataspace.copernicus.eu/APIs/STAC.html)
+* [S3 Access Guide](https://documentation.dataspace.copernicus.eu/APIs/S3.html)
